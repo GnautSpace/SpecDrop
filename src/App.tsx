@@ -57,6 +57,7 @@ function App() {
       pendo.initialize({
         visitor: {
           id: visitorId,
+          app: 'specdrop',
         },
       });
     }
@@ -107,6 +108,10 @@ function App() {
       }
 
       setTickets(data.tickets);
+      (window as any).pendo?.track('tickets-generated', {
+        ticketCount: data.tickets.length,
+        prdLength: prd.length,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -163,6 +168,11 @@ ${ticket.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n")}
       }
 
       showToast(`Ticket pushed successfully! Opened: ${data.filename}`);
+      (window as any).pendo?.track('ticket-pushed-to-github', {
+        ticketTitle: ticket.title,
+        priority: ticket.priority,
+        repo: repoName,
+      });
 
       if (data.url) {
         window.open(data.url, "_blank");
@@ -186,6 +196,10 @@ ${ticket.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n")}`;
 
     await navigator.clipboard.writeText(text);
     setCopiedId(index);
+    (window as any).pendo?.track('ticket-copied-to-clipboard', {
+      ticketTitle: ticket.title,
+      priority: ticket.priority,
+    });
     setTimeout(() => setCopiedId(null), 2000);
   };
 
