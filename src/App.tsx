@@ -113,7 +113,12 @@ function App() {
         prdLength: prd.length,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      const errorMessage = err instanceof Error ? err.message : "An error occurred";
+      setError(errorMessage);
+      (window as any).pendo?.track('ticket-generation-failed', {
+        errorMessage,
+        prdLength: prd.length,
+      });
     } finally {
       setLoading(false);
     }
@@ -178,7 +183,14 @@ ${ticket.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n")}
         window.open(data.url, "_blank");
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to push to GitHub");
+      const errorMessage = err instanceof Error ? err.message : "Failed to push to GitHub";
+      showToast(errorMessage);
+      (window as any).pendo?.track('github-push-failed', {
+        errorMessage,
+        ticketTitle: ticket.title,
+        priority: ticket.priority,
+        repo: repoName,
+      });
     } finally {
       setPushingId(null);
     }
@@ -364,9 +376,17 @@ ${ticket.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n")}`;
                           });
                           if (res.ok) {
                             showToast("Connection successful! Token works.");
+                            (window as any).pendo?.track('github-connection-tested', {
+                              connectionSuccess: true,
+                              repo: repoName,
+                            });
                           } else {
                             const data = await res.json().catch(() => ({}));
                             showToast(data.message || "Connection failed. Check your token and repo.");
+                            (window as any).pendo?.track('github-connection-tested', {
+                              connectionSuccess: false,
+                              repo: repoName,
+                            });
                           }
                         } catch {
                           showToast("Connection failed. Check your token and repo.");
