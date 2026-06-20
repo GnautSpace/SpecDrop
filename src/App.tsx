@@ -17,6 +17,7 @@ import {
   ClipboardPaste,
   TestTube,
 } from "lucide-react";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
@@ -92,28 +93,61 @@ function App() {
     setTickets([]);
 
     try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-tickets`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Gemini-Key": apiKey,
-        },
-        body: JSON.stringify({ prd }),
-      });
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-      const data = await response.json();
+      const prompt = `You are an expert Product Manager. Analyze the following Product Requirement Document (PRD) and break it down into development tickets.
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to generate tickets");
+For each ticket, provide:
+- title: A concise ticket title
+- userStory: Format as "As a [user type], I want [action] so that [benefit]"
+- acceptanceCriteria: An array of 3-5 specific, testable acceptance criteria
+- priority: One of "High", "Medium", or "Low" based on business impact and dependencies
+
+PRD:
+${prd}
+
+Return ONLY a valid JSON array of tickets with no markdown formatting, no code blocks, just raw JSON. Example format:
+[
+  {
+    "title": "User Authentication Flow",
+    "userStory": "As a new user, I want to create an account so that I can access personalized features",
+    "acceptanceCriteria": ["User can enter email and password", "Email validation works", "Account is created successfully"],
+    "priority": "High"
+  }
+]`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const textContent = response.text();
+
+      if (!textContent) {
+        throw new Error("Gemini returned an empty response. Please try again.");
       }
 
-      setTickets(data.tickets);
+      let tickets: Ticket[];
+      try {
+        const cleanedContent = textContent
+          .replace(/```json\n?/g, "")
+          .replace(/```\n?/g, "")
+          .trim();
+        tickets = JSON.parse(cleanedContent);
+      } catch (parseErr) {
+        throw new Error(`Failed to parse Gemini response as JSON. Raw response:\n\n${textContent}`);
+      }
+
+      if (!Array.isArray(tickets) || tickets.length === 0) {
+        throw new Error("Gemini returned no tickets. Please try a different PRD.");
+      }
+
+      setTickets(tickets);
       (window as any).pendo?.track('tickets-generated', {
-        ticketCount: data.tickets.length,
+        ticketCount: tickets.length,
         prdLength: prd.length,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -440,9 +474,9 @@ ${ticket.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n")}`;
             {error && (
               <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-rose-400">Error</p>
-                  <p className="text-sm text-rose-300/80 mt-1">{error}</p>
+                  <pre className="text-sm text-rose-300/80 mt-1 whitespace-pre-wrap break-words font-mono">{error}</pre>
                 </div>
               </div>
             )}
